@@ -1,7 +1,14 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
+#include <unistd.h>
+#include <string.h>
+#include <pthread.h>
 #ifndef MAIN_THREAD_H
 #define MAIN_THREAD_H
 
 void mainLoop();
-void *startMainLoop(void *ptr);
+void *startReceiveLoop(void *ptr);
+void receiveLoop();
 
 #endif

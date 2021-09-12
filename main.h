@@ -20,7 +20,7 @@
 
 #define ROOT 0
 
-typedef enum {InMonitor, InSend, InFinish, InFree, InMissionInitiation, InMission} state_t;
+typedef enum {InMonitor, InSend, InFinish, InFree, InWaitForMissionInitiation, InMissionInitiation, InMission} state_t;
 extern state_t stan;
 extern int rank;
 extern int size;
@@ -52,7 +52,7 @@ extern MPI_Datatype MPI_PAKIET_T;
 
 #define TALLOWTRANSPORT 2
 
-#define MISSIONSELECT 1
+#define INVITE_TO_MISSION 1
 #define MISSIONEND 2
 #define HOSPITALWAIT 3
 #define WORKSHOPWAIT 4
@@ -95,6 +95,7 @@ extern MPI_Datatype MPI_PAKIET_T;
 
 #define println(FORMAT, ...) printf("%c[%d;%dm [%d]: " FORMAT "%c[%d;%dm\n",  27, (1+(rank/7))%2, 31+(6+rank)%7, rank, ##__VA_ARGS__, 27,0,37);
 
+void sendPacketToTeam(packet_t *pkt, int tag);
 void sendPacket(packet_t *pkt, int destination, int tag);
 void updateTS_R(int receivedTS);
 void updateTS();

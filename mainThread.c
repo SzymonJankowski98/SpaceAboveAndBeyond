@@ -1,18 +1,23 @@
 #include "main.h"
 #include "mainThread.h"
 
-void *startMainLoop(void *ptr) {
-    mainLoop();
+void *startReceiveLoop(void *ptr) {
+    receiveLoop();
 }
 
 void mainLoop()
 {
-    pthread_mutex_lock(&loopMutex);
-    debug("Dołącza do zespołu: %d", TEAM_NUMBER);
     while (stan != InFinish) {
-        debug("working")
+        pthread_mutex_lock(&loopMutex);
+
         if (stan == InFree) {
-            
+            changeState(InWaitForMissionInitiation);
+            randomSleep();
+            changeState(InMissionInitiation);
+            debug("wysyła zaproszenie na misje do zespołu");
+            packet_t invitePacket;
+            // sendPacketToTeam(&invitePacket, INVITE_TO_MISSION);
+            sendPacket(&invitePacket, 1, INVITE_TO_MISSION);
         }
         // debug("Zmieniam stan na wysyłanie");
         // changeState( InSend );
@@ -25,6 +30,25 @@ void mainLoop()
         // debug("Skończyłem wysyłać");
     
         sleep(SEC_IN_STATE);
+        pthread_mutex_unlock(&loopMutex);
     }
-    pthread_mutex_unlock(&loopMutex);
+}
+
+void receiveLoop() {
+    MPI_Status status;
+    packet_t packet;
+    while (stan != InFinish) {
+        MPI_Recv( &packet, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        pthread_mutex_lock(&loopMutex);
+        updateTS_R(packet.ts);
+        switch (status.MPI_TAG) {
+            case INVITE_TO_MISSION: 
+                debug("otrzymano zaproszenie na misje od %d", packet.src);
+            break;
+            case FINISH: 
+                changeState(InFinish);
+            break;
+        }
+        pthread_mutex_unlock(&loopMutex);
+    }
 }

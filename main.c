@@ -19,7 +19,7 @@ volatile char end = FALSE;
 int size,rank, tallow;  //
 int TS, TEAM_NUMBER;
 MPI_Datatype MPI_PAKIET_T; 
-pthread_t threadKom, threadMon, threadMainLoop;
+pthread_t threadKom, threadMon, threadReceiveLoop;
 
 pthread_mutex_t loopMutex = PTHREAD_MUTEX_INITIALIZER;
 // pthread_mutex_t tallowMut = PTHREAD_MUTEX_INITIALIZER; //
@@ -78,9 +78,9 @@ void inicjuj(int *argc, char ***argv)
     TEAM_NUMBER = teamNumber(rank);
     TS = 0;
     changeState(InFree);
+    debug("Dołącza do zespołu: %d", TEAM_NUMBER);
 
-    pthread_create( &threadMainLoop, NULL, startMainLoop , 0);
-    debug("jestem");
+    pthread_create( &threadReceiveLoop, NULL, startReceiveLoop , 0);
 }
 
 /* usunięcie zamkków, czeka, aż zakończy się drugi wątek, zwalnia przydzielony typ MPI_PAKIET_T
@@ -91,9 +91,17 @@ void finalizuj()
     pthread_mutex_destroy( &loopMutex);
     /* Czekamy, aż wątek potomny się zakończy */
     println("czekam na wątek \"komunikacyjny\"\n" );
-    pthread_join(threadMainLoop, NULL);
+    pthread_join(threadReceiveLoop, NULL);
     MPI_Type_free(&MPI_PAKIET_T);
     MPI_Finalize();
+}
+
+void sendPacketToTeam(packet_t *pkt, int tag) {
+    for (int i = 0; i < size; i++) {
+        if (i != rank && teamNumber(i) == TEAM_NUMBER) {
+            sendPacket(pkt, i, tag);
+        }
+    }
 }
 
 void sendPacket(packet_t *pkt, int destination, int tag)
@@ -103,6 +111,7 @@ void sendPacket(packet_t *pkt, int destination, int tag)
     pkt->src = rank;
 
     updateTS();
+    pkt->ts = TS;
     MPI_Send( pkt, 1, MPI_PAKIET_T, destination, tag, MPI_COMM_WORLD);
 
     if (freepkt) free(pkt);
@@ -117,20 +126,10 @@ void updateTS_R(int receivedTS) {
 }
 
 void randomSleep() {
+    pthread_mutex_unlock(&loopMutex);
     sleep((rand() % 5) + 1);
+    pthread_mutex_unlock(&loopMutex);
 }
-
-
-// void changeTallow(int newTallow) //
-// {
-//     pthread_mutex_lock( &tallowMut );
-//     if (stan==InFinish) { 
-// 	pthread_mutex_unlock( &tallowMut );
-//         return;
-//     }
-//     tallow += newTallow;
-//     pthread_mutex_unlock( &tallowMut );
-// }
 
 void changeState(state_t newState)
 {
@@ -162,7 +161,6 @@ int min(int num1, int num2)
 int main(int argc, char **argv)
 {
     inicjuj(&argc, &argv);
-    tallow = 1000; //
     mainLoop();
 
     finalizuj();

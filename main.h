@@ -20,19 +20,21 @@
 
 #define ROOT 0
 
-typedef enum {InMonitor, InSend, InFinish, InFree, InWaitForMissionInitiation, InMissionInitiation, InMission} state_t;
+typedef enum {InFinish, InFree, InWaitForMissionInitiation, InMissionInitiation, InWaitingForMissionStart, InMission} state_t;
 extern state_t stan;
 extern int rank;
 extern int size;
+extern int *stack;
 
 extern int TEAM_NUMBER;
 extern int TS;
+extern int REQUIRED_ANSWERS_COUNTER;
+extern int LAST_TEAM_SEND_TS;
+extern int AIRPLANE_STATUS;
+extern int CURRENT_MISSION;
 
 /*mutexy*/
 extern pthread_mutex_t loopMutex ;
-
-/* Ile mamy łoju na składzie? */
-extern int tallow;
 
 /* stan globalny wykryty przez monitor */
 extern int globalState;
@@ -53,6 +55,8 @@ extern MPI_Datatype MPI_PAKIET_T;
 #define TALLOWTRANSPORT 2
 
 #define INVITE_TO_MISSION 1
+#define INVITE_TO_MISSION_ANSWER 2
+#define START_MISSION 3
 #define MISSIONEND 2
 #define HOSPITALWAIT 3
 #define WORKSHOPWAIT 4
@@ -95,14 +99,24 @@ extern MPI_Datatype MPI_PAKIET_T;
 
 #define println(FORMAT, ...) printf("%c[%d;%dm [%d]: " FORMAT "%c[%d;%dm\n",  27, (1+(rank/7))%2, 31+(6+rank)%7, rank, ##__VA_ARGS__, 27,0,37);
 
+void sendToStack(packet_t *pkt, int tag);
 void sendPacketToTeam(packet_t *pkt, int tag);
 void sendPacket(packet_t *pkt, int destination, int tag);
+void sendPacketWithoutTSUpdate(packet_t *pkt, int destination, int tag);
 void updateTS_R(int receivedTS);
 void updateTS();
 void changeState( state_t );
-void changeTallow( int );
+int airplaneDamageAfterMission();
 int teamNumber(int n);
 int min(int num1, int num2);
 int max(int num1, int num2);
+void nSleep(int n);
 void randomSleep() ;
+int randomMission();
+int getMissionDuration(int missionInt);
+int getMissionType(int missionInt);
+int canAcceptMissionInvitation(packet_t *pkt);
+void resetStack();
+void addToStack(int value);
+void sendToStack(packet_t *pkt, int tag);
 #endif

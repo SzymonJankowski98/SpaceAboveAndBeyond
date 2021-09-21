@@ -16,8 +16,13 @@ const int BAR_2_SIZE = 5;
 
 state_t stan = InFree;
 volatile char end = FALSE;
-int size,rank, tallow;  //
-int TS, TEAM_NUMBER;
+int size,rank;
+int TS, TEAM_NUMBER, CURRENT_MISSION;
+int REQUIRED_ANSWERS_COUNTER = 0;
+int LAST_TEAM_SEND_TS = 0;
+int AIRPLANE_STATUS = 1;
+
+int *stack;
 MPI_Datatype MPI_PAKIET_T; 
 pthread_t threadKom, threadMon, threadReceiveLoop;
 
@@ -65,8 +70,8 @@ void inicjuj(int *argc, char ***argv)
     MPI_Aint offsets[4]; 
     offsets[0] = offsetof(packet_t, ts);
     offsets[1] = offsetof(packet_t, src);
-    offsets[1] = offsetof(packet_t, team);
-    offsets[2] = offsetof(packet_t, data);
+    offsets[2] = offsetof(packet_t, team);
+    offsets[3] = offsetof(packet_t, data);
 
     MPI_Type_create_struct(nitems, blocklengths, offsets, typy, &MPI_PAKIET_T);
     MPI_Type_commit(&MPI_PAKIET_T);
@@ -77,6 +82,7 @@ void inicjuj(int *argc, char ***argv)
 
     TEAM_NUMBER = teamNumber(rank);
     TS = 0;
+    resetStack();
     changeState(InFree);
     debug("Dołącza do zespołu: %d", TEAM_NUMBER);
 
@@ -96,23 +102,39 @@ void finalizuj()
     MPI_Finalize();
 }
 
+void sendToStack(packet_t *pkt, int tag) {
+    for (int i = 0; i < size; i++) {
+        if(stack[i] == -1) break;
+        sendPacketWithoutTSUpdate(pkt, stack[i], tag);
+    }
+    resetStack();
+}
+
 void sendPacketToTeam(packet_t *pkt, int tag) {
+    updateTS();
+    LAST_TEAM_SEND_TS = TS;
+    REQUIRED_ANSWERS_COUNTER = 0;
     for (int i = 0; i < size; i++) {
         if (i != rank && teamNumber(i) == TEAM_NUMBER) {
-            sendPacket(pkt, i, tag);
+            sendPacketWithoutTSUpdate(pkt, i, tag);
+            REQUIRED_ANSWERS_COUNTER++;
         }
     }
 }
 
 void sendPacket(packet_t *pkt, int destination, int tag)
 {
+    updateTS();
+    sendPacketWithoutTSUpdate(pkt, destination, tag);
+}
+
+void sendPacketWithoutTSUpdate(packet_t *pkt, int destination, int tag) {
     int freepkt=0;
     if (pkt==0) { pkt = malloc(sizeof(packet_t)); freepkt=1;}
     pkt->src = rank;
 
-    updateTS();
     pkt->ts = TS;
-    MPI_Send( pkt, 1, MPI_PAKIET_T, destination, tag, MPI_COMM_WORLD);
+    MPI_Send(pkt, 1, MPI_PAKIET_T, destination, tag, MPI_COMM_WORLD);
 
     if (freepkt) free(pkt);
 }
@@ -125,10 +147,14 @@ void updateTS_R(int receivedTS) {
     TS = max(TS, receivedTS) + 1;
 }
 
+void nSleep(int n) {
+    pthread_mutex_unlock(&loopMutex);
+    sleep(n);
+    pthread_mutex_unlock(&loopMutex);
+}
+
 void randomSleep() {
-    pthread_mutex_unlock(&loopMutex);
-    sleep((rand() % 5) + 1);
-    pthread_mutex_unlock(&loopMutex);
+    nSleep((rand() % 5) + 1);
 }
 
 void changeState(state_t newState)
@@ -157,6 +183,48 @@ int min(int num1, int num2)
     return (num1 > num2 ) ? num2 : num1;
 }
 
+int airplaneDamageAfterMission() {
+    if (rand() % 2) return 0;
+    AIRPLANE_STATUS = 0;
+    return 1;
+}
+
+int randomMission() {
+    if (AIRPLANE_STATUS == 0) return rand() % 8 + 1;
+    return (rand() % 2) * 10  + (rand() % 8) + 1;
+}
+
+int getMissionDuration(int missionInt) {
+    return missionInt % 10;
+}
+
+int getMissionType(int missionInt) {
+    if (missionInt < 10) return 0;
+    return 1;
+}
+
+int canAcceptMissionInvitation(packet_t *pkt) {
+    if (getMissionType(pkt->data) == 1 && AIRPLANE_STATUS == 0) return 0;
+    if ((stan == InFree || stan == InWaitForMissionInitiation) ||
+       (stan == InMissionInitiation && ((pkt->ts < LAST_TEAM_SEND_TS) || (pkt->ts == LAST_TEAM_SEND_TS && rank < pkt->src)))) return 1;
+    return 0;
+}
+
+void resetStack() {
+    stack = malloc(sizeof(int) * size);
+    for (int i=0; i < size; i++) {
+        stack[i] = -1;
+    }
+}
+
+void addToStack(int value) {
+    for (int i=0; i < size; i++) {
+        if (stack[i] == -1) {
+            stack[i] = value;
+            break;
+        }
+    }
+}
 
 int main(int argc, char **argv)
 {

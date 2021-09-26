@@ -10,5 +10,6 @@
 void mainLoop();
 void *startReceiveLoop(void *ptr);
 void receiveLoop();
+void *startReparing(void *ptr);
 
 #endif

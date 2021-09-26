@@ -9,8 +9,8 @@
 
 const int TEAMS[2] = {3, 5};//dla 8 1:0,1,2     2:3,4   3:5,6,7
 const int NTEAMS = 3;
-const int HOSPITAL_SIZE = 4;
-const int WORKSHOP_SIZE = 4;
+const int HOSPITAL_SIZE = 2;
+const int WORKSHOP_SIZE = 2;
 const int BAR_1_SIZE = 3;
 const int BAR_2_SIZE = 5;
 
@@ -19,14 +19,20 @@ volatile char end = FALSE;
 int size,rank;
 int TS, TEAM_NUMBER, CURRENT_MISSION;
 int REQUIRED_ANSWERS_COUNTER = 0;
-int LAST_TEAM_SEND_TS = 0;
+int REQUIRED_HOSPITAL_ANSWERS = 0;
+int REQUIRED_WORKSHOP_ANSWERS = 0;
+int LAST_TEAM_SEND_TS = 99999;
+int LAST_ALL_SEND_TS = 99999;
 int AIRPLANE_STATUS = 1;
+int MARINE_STATUS = 1;
 
 int *stack;
+int *stackData;
 MPI_Datatype MPI_PAKIET_T; 
 pthread_t threadKom, threadMon, threadReceiveLoop;
 
 pthread_mutex_t loopMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t airplaneStatusMutex = PTHREAD_MUTEX_INITIALIZER;
 // pthread_mutex_t tallowMut = PTHREAD_MUTEX_INITIALIZER; //
 
 void check_thread_support(int provided)
@@ -78,7 +84,7 @@ void inicjuj(int *argc, char ***argv)
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-    srand(rank);
+    srand(time(NULL) + rank);
 
     TEAM_NUMBER = teamNumber(rank);
     TS = 0;
@@ -86,7 +92,7 @@ void inicjuj(int *argc, char ***argv)
     changeState(InFree);
     debug("Dołącza do zespołu: %d", TEAM_NUMBER);
 
-    pthread_create( &threadReceiveLoop, NULL, startReceiveLoop , 0);
+    pthread_create( &threadReceiveLoop, NULL, startReceiveLoop, 0);
 }
 
 /* usunięcie zamkków, czeka, aż zakończy się drugi wątek, zwalnia przydzielony typ MPI_PAKIET_T
@@ -95,6 +101,7 @@ void inicjuj(int *argc, char ***argv)
 void finalizuj()
 {
     pthread_mutex_destroy( &loopMutex);
+    pthread_mutex_destroy( &airplaneStatusMutex);
     /* Czekamy, aż wątek potomny się zakończy */
     println("czekam na wątek \"komunikacyjny\"\n" );
     pthread_join(threadReceiveLoop, NULL);
@@ -105,9 +112,20 @@ void finalizuj()
 void sendToStack(packet_t *pkt, int tag) {
     for (int i = 0; i < size; i++) {
         if(stack[i] == -1) break;
+        if(stackData[i] != -1) {
+            pkt->data=stackData[i];
+        }
         sendPacketWithoutTSUpdate(pkt, stack[i], tag);
     }
     resetStack();
+}
+
+void sendPacketToAll(packet_t *pkt, int tag) {
+    updateTS();
+    LAST_ALL_SEND_TS = TS;
+    for (int i = 0; i < size; i++) {
+        if (i != rank) sendPacketWithoutTSUpdate(pkt, i, tag);
+    }
 }
 
 void sendPacketToTeam(packet_t *pkt, int tag) {
@@ -150,7 +168,7 @@ void updateTS_R(int receivedTS) {
 void nSleep(int n) {
     pthread_mutex_unlock(&loopMutex);
     sleep(n);
-    pthread_mutex_unlock(&loopMutex);
+    pthread_mutex_lock(&loopMutex);
 }
 
 void randomSleep() {
@@ -189,6 +207,12 @@ int airplaneDamageAfterMission() {
     return 1;
 }
 
+int marineDamageAfterMission() {
+    if (rand() % 2) return 0;
+    MARINE_STATUS = 0;
+    return 1;
+}
+
 int randomMission() {
     if (AIRPLANE_STATUS == 0) return rand() % 8 + 1;
     return (rand() % 2) * 10  + (rand() % 8) + 1;
@@ -205,15 +229,30 @@ int getMissionType(int missionInt) {
 
 int canAcceptMissionInvitation(packet_t *pkt) {
     if (getMissionType(pkt->data) == 1 && AIRPLANE_STATUS == 0) return 0;
+    if (getMissionType(pkt->data) == 0 && MARINE_STATUS == 0) return 0;
     if ((stan == InFree || stan == InWaitForMissionInitiation) ||
        (stan == InMissionInitiation && ((pkt->ts < LAST_TEAM_SEND_TS) || (pkt->ts == LAST_TEAM_SEND_TS && rank < pkt->src)))) return 1;
     return 0;
 }
 
+int canAcceptHospitalRequest(packet_t *pkt) {
+    if (stan == InHospital) return 0;
+    if (stan == InQueueForHospital && ((pkt->ts < LAST_ALL_SEND_TS) || (pkt->ts == LAST_ALL_SEND_TS && rank < pkt->src))) return 0;
+    return 1;
+}
+
+int canAcceptWorkshopRequest(packet_t *pkt) {
+    if (stan == InWorkshop) return 0;
+    if (stan == InQueueForWorkshop && ((pkt->ts < LAST_ALL_SEND_TS) || (pkt->ts == LAST_ALL_SEND_TS && rank < pkt->src))) return 0;
+    return 1;
+}
+
 void resetStack() {
     stack = malloc(sizeof(int) * size);
+    stackData = malloc(sizeof(int) * size);
     for (int i=0; i < size; i++) {
         stack[i] = -1;
+        stackData[i] = -1;
     }
 }
 
@@ -221,6 +260,17 @@ void addToStack(int value) {
     for (int i=0; i < size; i++) {
         if (stack[i] == -1) {
             stack[i] = value;
+            stackData[i] = -1;
+            break;
+        }
+    }
+}
+
+void addToStackWithData(int value, int data) {
+    for (int i=0; i < size; i++) {
+        if (stack[i] == -1) {
+            stack[i] = value;
+            stackData[i] = data;
             break;
         }
     }

@@ -20,21 +20,31 @@
 
 #define ROOT 0
 
-typedef enum {InFinish, InFree, InWaitForMissionInitiation, InMissionInitiation, InWaitingForMissionStart, InMission} state_t;
+typedef enum {InFinish, InFree, InWaitForMissionInitiation, InMissionInitiation, InWaitingForMissionStart, InMission, InWaitForHospital, InWaitForWorkshop, InWaitForBar, InQueueForHospital, InQueueForWorkshop, InHospital, InWorkshop, ReadyForNextIteration} state_t;
 extern state_t stan;
 extern int rank;
 extern int size;
 extern int *stack;
+extern int *stackData;
 
+const int HOSPITAL_SIZE;
+const int WORKSHOP_SIZE;
+const int BAR_1_SIZE;
+const int BAR_2_SIZE;
 extern int TEAM_NUMBER;
 extern int TS;
 extern int REQUIRED_ANSWERS_COUNTER;
+extern int REQUIRED_HOSPITAL_ANSWERS;
+extern int REQUIRED_WORKSHOP_ANSWERS;
 extern int LAST_TEAM_SEND_TS;
+extern int LAST_ALL_SEND_TS;
 extern int AIRPLANE_STATUS;
+extern int MARINE_STATUS;
 extern int CURRENT_MISSION;
 
 /*mutexy*/
 extern pthread_mutex_t loopMutex ;
+extern pthread_mutex_t airplaneStatusMutex ;
 
 /* stan globalny wykryty przez monitor */
 extern int globalState;
@@ -52,12 +62,13 @@ extern MPI_Datatype MPI_PAKIET_T;
 
 /* Typy wiadomości */
 
-#define TALLOWTRANSPORT 2
-
 #define INVITE_TO_MISSION 1
 #define INVITE_TO_MISSION_ANSWER 2
 #define START_MISSION 3
-#define MISSIONEND 2
+#define HOSPITAL_REQUEST 4
+#define HOSPITAL_ACCEPT 5
+#define WORKSHOP_REQUEST 6
+#define WORKSHOP_ACCEPT 7
 #define HOSPITALWAIT 3
 #define WORKSHOPWAIT 4
 #define BARWAIT 5
@@ -100,6 +111,7 @@ extern MPI_Datatype MPI_PAKIET_T;
 #define println(FORMAT, ...) printf("%c[%d;%dm [%d]: " FORMAT "%c[%d;%dm\n",  27, (1+(rank/7))%2, 31+(6+rank)%7, rank, ##__VA_ARGS__, 27,0,37);
 
 void sendToStack(packet_t *pkt, int tag);
+void sendPacketToAll(packet_t *pkt, int tag);
 void sendPacketToTeam(packet_t *pkt, int tag);
 void sendPacket(packet_t *pkt, int destination, int tag);
 void sendPacketWithoutTSUpdate(packet_t *pkt, int destination, int tag);
@@ -107,6 +119,7 @@ void updateTS_R(int receivedTS);
 void updateTS();
 void changeState( state_t );
 int airplaneDamageAfterMission();
+int marineDamageAfterMission();
 int teamNumber(int n);
 int min(int num1, int num2);
 int max(int num1, int num2);
@@ -116,7 +129,10 @@ int randomMission();
 int getMissionDuration(int missionInt);
 int getMissionType(int missionInt);
 int canAcceptMissionInvitation(packet_t *pkt);
+int canAcceptHospitalRequest(packet_t *pkt);
+int canAcceptWorkshopRequest(packet_t *pkt);
 void resetStack();
 void addToStack(int value);
+void addToStackWithData(int value, int data);
 void sendToStack(packet_t *pkt, int tag);
 #endif

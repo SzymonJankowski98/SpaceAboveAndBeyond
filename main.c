@@ -203,7 +203,9 @@ int min(int num1, int num2)
 
 int airplaneDamageAfterMission() {
     if (rand() % 2) return 0;
+    pthread_mutex_lock(&airplaneStatusMutex);
     AIRPLANE_STATUS = 0;
+    pthread_mutex_unlock(&airplaneStatusMutex);
     return 1;
 }
 
@@ -214,7 +216,9 @@ int marineDamageAfterMission() {
 }
 
 int randomMission() {
+    pthread_mutex_lock(&airplaneStatusMutex);
     if (AIRPLANE_STATUS == 0) return rand() % 8 + 1;
+    pthread_mutex_unlock(&airplaneStatusMutex);
     return (rand() % 2) * 10  + (rand() % 8) + 1;
 }
 
@@ -228,7 +232,9 @@ int getMissionType(int missionInt) {
 }
 
 int canAcceptMissionInvitation(packet_t *pkt) {
+    pthread_mutex_lock(&airplaneStatusMutex);
     if (getMissionType(pkt->data) == 1 && AIRPLANE_STATUS == 0) return 0;
+    pthread_mutex_unlock(&airplaneStatusMutex);
     if (getMissionType(pkt->data) == 0 && MARINE_STATUS == 0) return 0;
     if ((stan == InFree || stan == InWaitForMissionInitiation) ||
        (stan == InMissionInitiation && ((pkt->ts < LAST_TEAM_SEND_TS) || (pkt->ts == LAST_TEAM_SEND_TS && rank < pkt->src)))) return 1;

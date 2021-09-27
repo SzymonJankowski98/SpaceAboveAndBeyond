@@ -23,11 +23,14 @@ int REQUIRED_HOSPITAL_ANSWERS = 0;
 int REQUIRED_WORKSHOP_ANSWERS = 0;
 int LAST_TEAM_SEND_TS = 99999;
 int LAST_ALL_SEND_TS = 99999;
+int LAST_WORKSHOP_REQUEST_TS = 99999;
 int AIRPLANE_STATUS = 1;
 int MARINE_STATUS = 1;
 
 int *stack;
 int *stackData;
+int *workshopStack;
+int *workshopStackData;
 MPI_Datatype MPI_PAKIET_T; 
 pthread_t threadKom, threadMon, threadReceiveLoop;
 
@@ -89,6 +92,7 @@ void inicjuj(int *argc, char ***argv)
     TEAM_NUMBER = teamNumber(rank);
     TS = 0;
     resetStack();
+    resetWorkshopStack();
     changeState(InFree);
     debug("Dołącza do zespołu: %d", TEAM_NUMBER);
 
@@ -118,6 +122,17 @@ void sendToStack(packet_t *pkt, int tag) {
         sendPacketWithoutTSUpdate(pkt, stack[i], tag);
     }
     resetStack();
+}
+
+void sendToWorkshopStack(packet_t *pkt, int tag) {
+    for (int i = 0; i < size; i++) {
+        if(workshopStack[i] == -1) break;
+        if(workshopStackData[i] != -1) {
+            pkt->data=workshopStackData[i];
+        }
+        sendPacketWithoutTSUpdate(pkt, workshopStack[i], tag);
+    }
+    resetWorkshopStack();
 }
 
 void sendPacketToAll(packet_t *pkt, int tag) {
@@ -262,6 +277,15 @@ void resetStack() {
     }
 }
 
+void resetWorkshopStack() {
+    workshopStack = malloc(sizeof(int) * size);
+    workshopStackData = malloc(sizeof(int) * size);
+    for (int i=0; i < size; i++) {
+        workshopStack[i] = -1;
+        workshopStackData[i] = -1;
+    }
+}
+
 void addToStack(int value) {
     for (int i=0; i < size; i++) {
         if (stack[i] == -1) {
@@ -272,11 +296,31 @@ void addToStack(int value) {
     }
 }
 
+void addToWorkshopStack(int value) {
+    for (int i=0; i < size; i++) {
+        if (workshopStack[i] == -1) {
+            workshopStack[i] = value;
+            workshopStackData[i] = -1;
+            break;
+        }
+    }
+}
+
 void addToStackWithData(int value, int data) {
     for (int i=0; i < size; i++) {
         if (stack[i] == -1) {
             stack[i] = value;
             stackData[i] = data;
+            break;
+        }
+    }
+}
+
+void addToWorkshopStackWithData(int value, int data) {
+    for (int i=0; i < size; i++) {
+        if (workshopStack[i] == -1) {
+            workshopStack[i] = value;
+            workshopStackData[i] = data;
             break;
         }
     }

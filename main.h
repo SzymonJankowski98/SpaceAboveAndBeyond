@@ -26,6 +26,8 @@ extern int rank;
 extern int size;
 extern int *stack;
 extern int *stackData;
+extern int *workshopStack;
+extern int *workshopStackData;
 
 const int HOSPITAL_SIZE;
 const int WORKSHOP_SIZE;
@@ -38,6 +40,7 @@ extern int REQUIRED_HOSPITAL_ANSWERS;
 extern int REQUIRED_WORKSHOP_ANSWERS;
 extern int LAST_TEAM_SEND_TS;
 extern int LAST_ALL_SEND_TS;
+extern int LAST_WORKSHOP_REQUEST_TS;
 extern int AIRPLANE_STATUS;
 extern int MARINE_STATUS;
 extern int CURRENT_MISSION;
@@ -135,4 +138,8 @@ void resetStack();
 void addToStack(int value);
 void addToStackWithData(int value, int data);
 void sendToStack(packet_t *pkt, int tag);
+void resetWorkshopStack();
+void addToWorkshopStack(int value);
+void addToWorkshopStackWithData(int value, int data);
+void sendToWorkshopStack(packet_t *pkt, int tag);
 #endif

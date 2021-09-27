@@ -86,7 +86,7 @@ void mainLoop()
                 debug("Wchodzi do warsztatu");
                 pthread_create(&threadAirplaneRepair, NULL, startReparing, 0);
                 packet_t* acceptPacket = malloc(sizeof(packet_t));
-                sendToStack(acceptPacket, WORKSHOP_ACCEPT);
+                sendToWorkshopStack(acceptPacket, WORKSHOP_ACCEPT);
                 free(acceptPacket);
                 changeState(ReadyForNextIteration);
                 debug("zezwala na wejście do warsztatu pozostałym");
@@ -155,7 +155,7 @@ void receiveLoop() {
                     free(acceptPacket);
                 } 
                 else {
-                    addToStackWithData(packet.src, packet.ts);
+                    addToWorkshopStackWithData(packet.src, packet.ts);
                 }
             break;
             case WORKSHOP_ACCEPT:
@@ -175,5 +175,4 @@ void *startReparing(void *ptr) {
     AIRPLANE_STATUS = 1;
     pthread_mutex_unlock(&airplaneStatusMutex);
     debug("samolot naprawiony")
-    exit(0);
 }

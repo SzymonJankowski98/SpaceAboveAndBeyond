@@ -24,6 +24,11 @@ int REQUIRED_WORKSHOP_ANSWERS = 0;
 int LAST_TEAM_SEND_TS = 99999;
 int LAST_ALL_SEND_TS = 99999;
 int LAST_WORKSHOP_REQUEST_TS = 99999;
+int LAST_MISSION_TS = 0;
+int BAR_VISITORS_COUNTER = 0;
+int BAR_INVITATION_TO_ACCEPT = -1;
+int BAR_INVITATION_TO_ACCEPT_TS = 0;
+int AMOUNT_OF_BAR_PARTICIPANTS = 1;
 int AIRPLANE_STATUS = 1;
 int MARINE_STATUS = 1;
 
@@ -230,6 +235,11 @@ int marineDamageAfterMission() {
     return 1;
 }
 
+int randomBar() {
+    if (rand() % 2) return 0;
+    return 1;
+}
+
 int randomMission() {
     pthread_mutex_lock(&airplaneStatusMutex);
     if (AIRPLANE_STATUS == 0) return rand() % 8 + 1;
@@ -248,7 +258,7 @@ int getMissionType(int missionInt) {
 
 int canAcceptMissionInvitation(packet_t *pkt) {
     pthread_mutex_lock(&airplaneStatusMutex);
-    if (getMissionType(pkt->data) == 1 && AIRPLANE_STATUS == 0) return 0;
+    if (getMissionType(pkt->data) == 1 && (AIRPLANE_STATUS == 0 || MARINE_STATUS == 0)) return 0;
     pthread_mutex_unlock(&airplaneStatusMutex);
     if (getMissionType(pkt->data) == 0 && MARINE_STATUS == 0) return 0;
     if ((stan == InFree || stan == InWaitForMissionInitiation) ||

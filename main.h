@@ -20,7 +20,7 @@
 
 #define ROOT 0
 
-typedef enum {InFinish, InFree, InWaitForMissionInitiation, InMissionInitiation, InWaitingForMissionStart, InMission, InWaitForHospital, InWaitForWorkshop, InWaitForBar, InQueueForHospital, InQueueForWorkshop, InHospital, InWorkshop, ReadyForNextIteration} state_t;
+typedef enum {InFinish, InFree, InWaitForMissionInitiation, InMissionInitiation, InWaitingForMissionStart, InMission, InWaitForHospital, InWaitForWorkshop, InWaitForBar, InQueueForHospital, InQueueForWorkshop, InHospital, InWorkshop, InBarInviting, InWaitForBarStart, InBar, ReadyForNextIteration, InQueueForBar1, InQueueForBar2} state_t;
 extern state_t stan;
 extern int rank;
 extern int size;
@@ -40,7 +40,12 @@ extern int REQUIRED_HOSPITAL_ANSWERS;
 extern int REQUIRED_WORKSHOP_ANSWERS;
 extern int LAST_TEAM_SEND_TS;
 extern int LAST_ALL_SEND_TS;
+extern int LAST_MISSION_TS;
 extern int LAST_WORKSHOP_REQUEST_TS;
+extern int BAR_VISITORS_COUNTER;
+extern int BAR_INVITATION_TO_ACCEPT;
+extern int BAR_INVITATION_TO_ACCEPT_TS;
+extern int AMOUNT_OF_BAR_PARTICIPANTS;
 extern int AIRPLANE_STATUS;
 extern int MARINE_STATUS;
 extern int CURRENT_MISSION;
@@ -72,6 +77,8 @@ extern MPI_Datatype MPI_PAKIET_T;
 #define HOSPITAL_ACCEPT 5
 #define WORKSHOP_REQUEST 6
 #define WORKSHOP_ACCEPT 7
+#define INVITE_TO_BAR 8
+#define INVITE_TO_BAR_ANSWER 9
 #define HOSPITALWAIT 3
 #define WORKSHOPWAIT 4
 #define BARWAIT 5
@@ -129,6 +136,7 @@ int max(int num1, int num2);
 void nSleep(int n);
 void randomSleep() ;
 int randomMission();
+int randomBar();
 int getMissionDuration(int missionInt);
 int getMissionType(int missionInt);
 int canAcceptMissionInvitation(packet_t *pkt);

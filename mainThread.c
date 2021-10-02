@@ -23,6 +23,7 @@ void mainLoop()
                 CURRENT_MISSION = invitePacket->data;
                 debug("wysyła zaproszenie na misje(%d) do zespołu", invitePacket->data);
                 sendPacketToTeam(invitePacket, INVITE_TO_MISSION);
+                LAST_MISSION_TS = TS;
                 free(invitePacket);
             }
         } else if (stan == InMissionInitiation) {
@@ -53,6 +54,13 @@ void mainLoop()
                 } else {
                     debug("wraca z misji %d, marine ranny", CURRENT_MISSION);
                     changeState(InWaitForHospital);
+                    if (BAR_INVITATION_TO_ACCEPT != -1) {
+                        packet_t* answerPacket = malloc(sizeof(packet_t));
+                        answerPacket->data = 0;
+                        sendPacket(answerPacket, BAR_INVITATION_TO_ACCEPT, INVITE_TO_BAR_ANSWER);
+                        debug("odrzuca zaproszenie do baru od %d", BAR_INVITATION_TO_ACCEPT);
+                        free(answerPacket);
+                    }
                 }
             }
         } else if (stan == InWaitForHospital) {
@@ -88,8 +96,38 @@ void mainLoop()
                 packet_t* acceptPacket = malloc(sizeof(packet_t));
                 sendToWorkshopStack(acceptPacket, WORKSHOP_ACCEPT);
                 free(acceptPacket);
-                changeState(ReadyForNextIteration);
+                changeState(InWaitForBar);
                 debug("zezwala na wejście do warsztatu pozostałym");
+            }
+        } else if (stan == InWaitForBar) {
+            if (BAR_INVITATION_TO_ACCEPT == -1) {
+                changeState(InBarInviting);
+                BAR_VISITORS_COUNTER = 0;
+                packet_t* invitePacket = malloc(sizeof(packet_t));
+                invitePacket->data = LAST_MISSION_TS;
+                debug("wysyła zaproszenie do baru do zespołu");
+                sendPacketToTeam(invitePacket, INVITE_TO_BAR);
+                BAR_INVITATION_TO_ACCEPT = rank;
+                BAR_INVITATION_TO_ACCEPT_TS = TS;
+                AMOUNT_OF_BAR_PARTICIPANTS = 1;
+                free(invitePacket);
+            } else {
+                changeState(InWaitForBarStart);
+                packet_t* answerPacket = malloc(sizeof(packet_t));
+                answerPacket->data = 1;
+                sendPacket(answerPacket, BAR_INVITATION_TO_ACCEPT, INVITE_TO_BAR_ANSWER);
+                debug("akceptuje zaproszenie do baru od %d", BAR_INVITATION_TO_ACCEPT);
+                free(answerPacket);
+            }
+        } else if (stan == InBarInviting) {
+            if (REQUIRED_ANSWERS_COUNTER == 0) {
+                if (randomBar()) {
+                    debug("ustawia się w kolejce do baru 1 (%d marines)", AMOUNT_OF_BAR_PARTICIPANTS);
+                    changeState(InQueueForBar1);
+                } else {
+                    debug("ustawia się w kolejce do baru 2 (%d marines)", AMOUNT_OF_BAR_PARTICIPANTS);
+                    changeState(InQueueForBar2);
+                }
             }
         }
         randomSleep(SEC_IN_STATE);
@@ -112,10 +150,12 @@ void receiveLoop() {
                     changeState(InWaitingForMissionStart);
                     answerPacket->data = 1;
                     sendPacket(answerPacket, packet.src, INVITE_TO_MISSION_ANSWER);
+                    LAST_MISSION_TS = packet.ts;
                     debug("akceptuje zaproszenie na misje od %d", packet.src);
                 } 
                 else {
                     answerPacket->data = 0;
+                    sendPacket(answerPacket, packet.src, INVITE_TO_MISSION_ANSWER);
                     debug("odrzuca zaproszenie na misje od %d", packet.src);
                 }
                 free(answerPacket);
@@ -161,7 +201,68 @@ void receiveLoop() {
             case WORKSHOP_ACCEPT:
                 if (packet.data == LAST_ALL_SEND_TS) REQUIRED_WORKSHOP_ANSWERS--;
             break;
-            case FINISH: 
+            case INVITE_TO_BAR:
+                debug("otrzymano zaproszenie do baru od %d", packet.src);
+                packet_t* barAnswerPacket = malloc(sizeof(packet_t));
+                if (packet.data == LAST_MISSION_TS && stan != ReadyForNextIteration) {
+                    if (stan == InWaitForBarStart) {
+                        barAnswerPacket->data = 1;
+                        sendPacket(barAnswerPacket, packet.src, INVITE_TO_BAR_ANSWER);
+                        debug("akceptuje zaproszenie do baru od %d", packet.src);
+                    } else if (stan == InBarInviting) {
+                        if((packet.ts < BAR_INVITATION_TO_ACCEPT_TS) || (packet.ts == BAR_INVITATION_TO_ACCEPT_TS && BAR_INVITATION_TO_ACCEPT < packet.src)) {
+                            barAnswerPacket->data = 1;
+                            debug("akceptuje zaproszenie do baru od %d", BAR_INVITATION_TO_ACCEPT);
+                            sendPacket(barAnswerPacket, packet.src, INVITE_TO_BAR_ANSWER);
+                        } 
+                        else {
+                            barAnswerPacket->data = -1;
+                            debug("odrzuca zaproszenie do baru od %d", BAR_INVITATION_TO_ACCEPT);
+                            sendPacket(barAnswerPacket, packet.src, INVITE_TO_BAR_ANSWER);
+                        }
+                    } else if (stan == InWaitForHospital|| stan == InQueueForHospital || stan == InHospital) {
+                        barAnswerPacket->data = 0;
+                        sendPacket(barAnswerPacket, packet.src, INVITE_TO_BAR_ANSWER);
+                        debug("odrzuca zaproszenie do baru od %d", packet.src);
+                    }
+                    else {
+                        if (BAR_INVITATION_TO_ACCEPT != -1) {
+                            barAnswerPacket->data = 0;
+                            if((packet.ts < BAR_INVITATION_TO_ACCEPT_TS) || (packet.ts == BAR_INVITATION_TO_ACCEPT_TS && BAR_INVITATION_TO_ACCEPT < packet.src)) {
+                                barAnswerPacket->data = 0;
+                                debug("odrzuca zaproszenie do baru od %d", BAR_INVITATION_TO_ACCEPT);
+                                sendPacket(barAnswerPacket, BAR_INVITATION_TO_ACCEPT, INVITE_TO_BAR_ANSWER);
+                                BAR_INVITATION_TO_ACCEPT_TS = packet.ts;
+                                BAR_INVITATION_TO_ACCEPT = packet.src;
+                            } 
+                            else {
+                                barAnswerPacket->data = 0;
+                                debug("odrzuca zaproszenie do baru od %d", packet.src);
+                                sendPacket(barAnswerPacket, packet.src, INVITE_TO_BAR_ANSWER);
+                            }
+                        } else {
+                            BAR_INVITATION_TO_ACCEPT_TS = packet.ts;
+                            BAR_INVITATION_TO_ACCEPT = packet.src;
+                        }
+                    }
+                } else {
+                    barAnswerPacket->data = 0;
+                    sendPacket(barAnswerPacket, packet.src, INVITE_TO_BAR_ANSWER);
+                    debug("odrzuca zaproszenie do baru od %d", packet.src);
+                }
+                free(barAnswerPacket);
+            break;
+            case INVITE_TO_BAR_ANSWER:
+                if (packet.data == -1) {
+                    REQUIRED_ANSWERS_COUNTER++;
+                }
+                REQUIRED_ANSWERS_COUNTER--;
+                if (packet.data) {
+                    AMOUNT_OF_BAR_PARTICIPANTS++;
+                    addToStack(packet.src);
+                }
+            break;
+            case FINISH:
                 changeState(InFinish);
             break;
         }

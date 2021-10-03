@@ -21,6 +21,7 @@ int TS, TEAM_NUMBER, CURRENT_MISSION;
 int REQUIRED_ANSWERS_COUNTER = 0;
 int REQUIRED_HOSPITAL_ANSWERS = 0;
 int REQUIRED_WORKSHOP_ANSWERS = 0;
+int REQUIRED_BAR_ACCEPTS = 0;
 int LAST_TEAM_SEND_TS = 99999;
 int LAST_ALL_SEND_TS = 99999;
 int LAST_WORKSHOP_REQUEST_TS = 99999;
@@ -28,9 +29,12 @@ int LAST_MISSION_TS = 0;
 int BAR_VISITORS_COUNTER = 0;
 int BAR_INVITATION_TO_ACCEPT = -1;
 int BAR_INVITATION_TO_ACCEPT_TS = 0;
+int BAR_NUMBER = 0;
+int LAST_BAR_QUEUE_TS = 0;
 int AMOUNT_OF_BAR_PARTICIPANTS = 1;
 int AIRPLANE_STATUS = 1;
 int MARINE_STATUS = 1;
+int INVITOR = 0;
 
 int *stack;
 int *stackData;
@@ -77,15 +81,16 @@ void inicjuj(int *argc, char ***argv)
        brzydzimy się czymś w rodzaju MPI_Send(&typ, sizeof(pakiet_t), MPI_BYTE....
     */
     /* sklejone z stackoverflow */
-    const int nitems=4; /* bo packet_t ma trzy pola */
-    int blocklengths[4] = {1,1,1,1};
-    MPI_Datatype typy[4] = {MPI_INT, MPI_INT, MPI_INT, MPI_INT};
+    const int nitems=5; /* bo packet_t ma trzy pola */
+    int blocklengths[5] = {1,1,1,1,1};
+    MPI_Datatype typy[5] = {MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
 
-    MPI_Aint offsets[4]; 
+    MPI_Aint offsets[5]; 
     offsets[0] = offsetof(packet_t, ts);
     offsets[1] = offsetof(packet_t, src);
     offsets[2] = offsetof(packet_t, team);
     offsets[3] = offsetof(packet_t, data);
+    offsets[4] = offsetof(packet_t, data2);
 
     MPI_Type_create_struct(nitems, blocklengths, offsets, typy, &MPI_PAKIET_T);
     MPI_Type_commit(&MPI_PAKIET_T);
@@ -242,7 +247,10 @@ int randomBar() {
 
 int randomMission() {
     pthread_mutex_lock(&airplaneStatusMutex);
-    if (AIRPLANE_STATUS == 0) return rand() % 8 + 1;
+    if (AIRPLANE_STATUS == 0) {
+        pthread_mutex_unlock(&airplaneStatusMutex);
+        return rand() % 8 + 1;
+    }
     pthread_mutex_unlock(&airplaneStatusMutex);
     return (rand() % 2) * 10  + (rand() % 8) + 1;
 }
@@ -258,7 +266,10 @@ int getMissionType(int missionInt) {
 
 int canAcceptMissionInvitation(packet_t *pkt) {
     pthread_mutex_lock(&airplaneStatusMutex);
-    if (getMissionType(pkt->data) == 1 && (AIRPLANE_STATUS == 0 || MARINE_STATUS == 0)) return 0;
+    if (getMissionType(pkt->data) == 1 && (AIRPLANE_STATUS == 0 || MARINE_STATUS == 0)) {
+        pthread_mutex_unlock(&airplaneStatusMutex);
+        return 0;
+    }
     pthread_mutex_unlock(&airplaneStatusMutex);
     if (getMissionType(pkt->data) == 0 && MARINE_STATUS == 0) return 0;
     if ((stan == InFree || stan == InWaitForMissionInitiation) ||
@@ -275,6 +286,18 @@ int canAcceptHospitalRequest(packet_t *pkt) {
 int canAcceptWorkshopRequest(packet_t *pkt) {
     if (stan == InWorkshop) return 0;
     if (stan == InQueueForWorkshop && ((pkt->ts < LAST_ALL_SEND_TS) || (pkt->ts == LAST_ALL_SEND_TS && rank < pkt->src))) return 0;
+    return 1;
+}
+
+int canAcceptBar1Request(packet_t *pkt) {
+    if (stan == InBar1) return 0;
+    if (stan == InWaitForBar1Start && (pkt->ts < BAR_INVITATION_TO_ACCEPT_TS) || (pkt->ts == BAR_INVITATION_TO_ACCEPT_TS && BAR_INVITATION_TO_ACCEPT < pkt->src)) return 0;
+    return 1;
+}
+
+int canAcceptBar2Request(packet_t *pkt) {
+    if (stan == InBar2) return 0;
+    if (stan == InWaitForBar2Start && (pkt->ts < BAR_INVITATION_TO_ACCEPT_TS) || (pkt->ts == BAR_INVITATION_TO_ACCEPT_TS && BAR_INVITATION_TO_ACCEPT < pkt->src)) return 0;
     return 1;
 }
 

@@ -20,7 +20,7 @@
 
 #define ROOT 0
 
-typedef enum {InFinish, InFree, InWaitForMissionInitiation, InMissionInitiation, InWaitingForMissionStart, InMission, InWaitForHospital, InWaitForWorkshop, InWaitForBar, InQueueForHospital, InQueueForWorkshop, InHospital, InWorkshop, InBarInviting, InWaitForBarStart, InBar, ReadyForNextIteration, InQueueForBar1, InQueueForBar2} state_t;
+typedef enum {InFinish, InFree, InWaitForMissionInitiation, InMissionInitiation, InWaitingForMissionStart, InMission, InWaitForHospital, InWaitForWorkshop, InWaitForBar, InQueueForHospital, InQueueForWorkshop, InHospital, InWorkshop, InBarInviting, InWaitForBar1Start, InWaitForBar2Start, InBar1, InBar2, ReadyForNextIteration, InQueueForBar1, InQueueForBar2} state_t;
 extern state_t stan;
 extern int rank;
 extern int size;
@@ -38,6 +38,7 @@ extern int TS;
 extern int REQUIRED_ANSWERS_COUNTER;
 extern int REQUIRED_HOSPITAL_ANSWERS;
 extern int REQUIRED_WORKSHOP_ANSWERS;
+extern int REQUIRED_BAR_ACCEPTS;
 extern int LAST_TEAM_SEND_TS;
 extern int LAST_ALL_SEND_TS;
 extern int LAST_MISSION_TS;
@@ -45,10 +46,13 @@ extern int LAST_WORKSHOP_REQUEST_TS;
 extern int BAR_VISITORS_COUNTER;
 extern int BAR_INVITATION_TO_ACCEPT;
 extern int BAR_INVITATION_TO_ACCEPT_TS;
+extern int BAR_NUMBER;
 extern int AMOUNT_OF_BAR_PARTICIPANTS;
 extern int AIRPLANE_STATUS;
 extern int MARINE_STATUS;
 extern int CURRENT_MISSION;
+extern int INVITOR;
+extern int LAST_BAR_QUEUE_TS;
 
 /*mutexy*/
 extern pthread_mutex_t loopMutex ;
@@ -65,6 +69,7 @@ typedef struct {
     int src;      /* pole nie przesyłane, ale ustawiane w main_loop */
     int team;
     int data;     /* przykładowe pole z danymi; można zmienić nazwę na bardziej pasującą */
+    int data2;
 } packet_t;
 extern MPI_Datatype MPI_PAKIET_T;
 
@@ -79,6 +84,11 @@ extern MPI_Datatype MPI_PAKIET_T;
 #define WORKSHOP_ACCEPT 7
 #define INVITE_TO_BAR 8
 #define INVITE_TO_BAR_ANSWER 9
+#define BAR1_REQUEST 10
+#define BAR2_REQUEST 11
+#define BAR1_REQUEST_ACCEPT 12
+#define BAR2_REQUEST_ACCEPT 13
+#define START_BAR 14
 #define HOSPITALWAIT 3
 #define WORKSHOPWAIT 4
 #define BARWAIT 5
@@ -142,6 +152,8 @@ int getMissionType(int missionInt);
 int canAcceptMissionInvitation(packet_t *pkt);
 int canAcceptHospitalRequest(packet_t *pkt);
 int canAcceptWorkshopRequest(packet_t *pkt);
+int canAcceptBar1Request(packet_t *pkt);
+int canAcceptBar2Request(packet_t *pkt);
 void resetStack();
 void addToStack(int value);
 void addToStackWithData(int value, int data);
